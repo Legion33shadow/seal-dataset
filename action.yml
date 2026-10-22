@@ -1,0 +1,71 @@
+name: "LEGION SEAL dataset snapshot"
+description: "Seal a dataset folder's manifest (file SHA-256s) in the public LEGION SEAL log: only the manifest hash is sent."
+author: "Legion33shadow"
+branding:
+  icon: "database"
+  color: "blue"
+inputs:
+  dir:
+    description: "Dataset folder to snapshot (relative to the workspace)."
+    required: true
+  name:
+    description: "Dataset name for the public label 'dataset <name>@<revision>' (default: the repository name)."
+    required: false
+    default: ""
+  revision:
+    description: "Revision for the label (default: the commit SHA of the workflow run)."
+    required: false
+    default: ""
+  mask-names:
+    description: "'true' replaces file names in the manifest with HMAC-SHA256(salt, path); the salt stays in out-dir/manifest.salt."
+    required: false
+    default: "false"
+  no-label:
+    description: "'true' sends no label at all (only the manifest hash)."
+    required: false
+    default: "false"
+  out-dir:
+    description: "Where the manifest, receipt and dataset-card snippet are written (upload it as an artifact)."
+    required: false
+    default: "seal-dataset"
+  base-url:
+    description: "Registry URL."
+    required: false
+    default: "https://seal.legion-api.com"
+  test:
+    description: "'true' sends X-Legion-Test: the seal is real but excluded from the registry's adoption counters and feed."
+    required: false
+    default: "false"
+outputs:
+  leaf:
+    description: "Leaf index of the seal."
+    value: ${{ steps.seal.outputs.leaf }}
+  receipt:
+    description: "Path of the JSON receipt."
+    value: ${{ steps.seal.outputs.receipt }}
+  manifest-sha256:
+    description: "SHA-256 of the manifest that was sealed."
+    value: ${{ steps.seal.outputs.manifest-sha256 }}
+  badge:
+    description: "Badge Markdown for a dataset card or README."
+    value: ${{ steps.seal.outputs.badge }}
+runs:
+  using: "composite"
+  steps:
+    - id: seal
+      shell: bash
+      env:
+        SD_DIR: ${{ inputs.dir }}
+        SD_NAME: ${{ inputs.name }}
+        SD_REV: ${{ inputs.revision }}
+        SD_MASK: ${{ inputs.mask-names }}
+        SD_NOLABEL: ${{ inputs.no-label }}
+        SD_OUT: ${{ inputs.out-dir }}
+        SD_BASE: ${{ inputs.base-url }}
+        SD_TEST: ${{ inputs.test }}
+      run: |
+        args=(seal "$SD_DIR" --out-dir "$SD_OUT" --base "$SD_BASE" --name "${SD_NAME:-${GITHUB_REPOSITORY:-dataset}}" --revision "${SD_REV:-${GITHUB_SHA:-local}}")
+        [ "$SD_MASK" = "true" ] && args+=(--mask-names)
+        [ "$SD_NOLABEL" = "true" ] && args+=(--no-label)
+        [ "$SD_TEST" = "true" ] && args+=(--test)
+        python3 "$GITHUB_ACTION_PATH/seal_dataset.py" "${args[@]}"
